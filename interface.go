@@ -37,8 +37,18 @@ type Node interface {
 
 // A NodeConnection is how the balancer interfaces with the nodes.
 type NodeConnection interface {
+	// GetHost and GetPort make up the address that the node is located at.
 	GetHost() string
 	GetPort() int
+
+	// AddJob, FinishJob and AmountOfJobs gives the balancer a general
+	//   idea of how much work the balancer currently has.
+	AddJob()
+	FinishJob()
+	GetLoad() int
+
+	// Connect establishes the connection from the balancer to the node.
+	Connect() error
 
 	// GetStatus returns a status struct with information about how the
 	//   node is currently running.
@@ -48,6 +58,12 @@ type NodeConnection interface {
 	Send(string) (string, error)
 }
 
+// A NodeFactory is how a balancer can create new NodeConnections for itself.
+type NodeFactory interface {
+	Create(string) NodeConnection
+}
+
+// A Status is what a balancer can easily ask about its nodes.
 type Status interface {
 	String() string
 	GetIdleTime() time.Time
