@@ -21,20 +21,6 @@ type Balancer interface {
 	GetPort() int
 }
 
-// Node is the interface that defines the nodes that a load balancer can use.
-type Node interface {
-	// Register allows the node to self-register itself with the load balancer.
-	Register() error
-
-	// GetHost and GetPort is what the node is listening on.
-	GetHost() string
-	GetPort() int
-
-	// ListenAndServe should be run by the node to continuously accept
-	//   work as strings and then reply with finished work as strings.
-	ListenAndServe() error
-}
-
 // A NodeConnection is how the balancer interfaces with the nodes.
 type NodeConnection interface {
 	// GetHost and GetPort make up the address that the node is located at.
@@ -63,8 +49,32 @@ type NodeFactory interface {
 	Create(string) NodeConnection
 }
 
+// Node is the interface that defines the nodes that a load balancer can use.
+type Node interface {
+	// Register allows the node to self-register itself with the load balancer.
+	Register() error
+
+	// GetHost and GetPort is what the node is listening on.
+	GetHost() string
+	GetPort() int
+
+	// ListenAndServe should be run by the node to continuously accept
+	//   work as strings and then reply with finished work as strings.
+	ListenAndServe() error
+}
+
+// A WorkPool is how a node can complete work and report on its work.
+type WorkPool interface {
+	Work(string) (string, error)
+
+	// Status accepts a time which is interpreted as the time
+	//   the request was made for the status.
+	Status(time.Time) Status
+}
+
 // A Status is what a balancer can easily ask about its nodes.
 type Status interface {
 	String() string
+	Parse(string)
 	GetIdleTime() time.Time
 }
