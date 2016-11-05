@@ -14,7 +14,7 @@ import (
 type Server struct {
 	host         string
 	port         int
-	workPool     WorkPool
+	worker       Worker
 	nodeFilePath string
 }
 
@@ -75,15 +75,15 @@ func (node *Server) ListenAndServe() error {
 // Status is the implementation to get the status of the node
 //   in an RPC-accessible way.
 func (node *Server) Status(requestTime time.Time, response *string) error {
-	status := node.workPool.Status(requestTime).String()
+	status := node.worker.Status(requestTime).String()
 	response = &status
 	return nil
 }
 
-// Work is the implementation to instruct the node to do work
+// Do (work) is the implementation to instruct the node to do work
 //   in an RPC-accessible way.
-func (node *Server) Work(payload string, response *string) error {
-	finishedWork, err := node.workPool.Work(payload)
+func (node *Server) Do(work string, response *string) error {
+	finishedWork, err := node.worker.Do(work)
 	response = &finishedWork
 	return err
 }

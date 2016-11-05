@@ -63,9 +63,10 @@ type Node interface {
 	ListenAndServe() error
 }
 
-// A WorkPool is how a node can complete work and report on its work.
-type WorkPool interface {
-	Work(string) (string, error)
+// A Worker is how a node can complete and report on work.
+//   The implementation is left for the implementing project.
+type Worker interface {
+	Do(string) (string, error)
 
 	// Status accepts a time which is interpreted as the time
 	//   the request was made for the status.
