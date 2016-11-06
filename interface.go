@@ -31,14 +31,17 @@ type NodeConnection interface {
 	//   idea of how much work the balancer currently has.
 	AddJob()
 	FinishJob()
-	GetLoad() int
+	GetWorkLoad() int
 
 	// Connect establishes the connection from the balancer to the node.
 	Connect() error
 
-	// GetStatus returns a status struct with information about how the
-	//   node is currently running.
-	GetStatus() (Status, error)
+	// GetStatus returns a status struct with information about the
+	//   status of the node from when the status was last requested.
+	GetStatus() Status
+
+	// UpdateStatus requests the status from the node and stores it.
+	UpdateStatus() error
 
 	// Send allows for a simple way to delegate work to a specific node.
 	Send(string) (string, error)
@@ -76,6 +79,6 @@ type Worker interface {
 // A Status is what a balancer can easily ask about its nodes.
 type Status interface {
 	String() string
-	Parse(string)
+	Update(string)
 	GetIdleTime() time.Time
 }

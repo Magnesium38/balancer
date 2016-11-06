@@ -1,59 +1,103 @@
 package balancer
 
+import (
+	"net/rpc"
+	"strconv"
+	"time"
+)
+
 // A ConnectionFactory creates the connection to the nodes for the balancer.
 type ConnectionFactory struct {
 }
 
 // Create takes the connection info and creates the connection struct.
-func (factory *ConnectionFactory) Create(connInfo string) Connection {
-	return Connection{}
+func (factory *ConnectionFactory) Create(connInfo string) NodeConnection {
+	return &Connection{}
 }
 
 // A Connection is a way for a balancer to communicate with a node.
 type Connection struct {
+	host     string
+	port     int
+	jobCount int
+	status   Status
+	client   *rpc.Client
 }
 
 // GetHost returns the hostname that the node is listening on.
 func (conn *Connection) GetHost() string {
-	return ""
+	return conn.host
 }
 
 // GetPort returns the port that the node is listening on.
-func (conn *Connection) GetPort() string {
-	return ""
+func (conn *Connection) GetPort() int {
+	return conn.port
 }
 
 // AddJob increments the internal counter of jobs by 1.
 func (conn *Connection) AddJob() {
-
+	conn.jobCount++
 }
 
 // FinishJob decrements the internal counter of jobs by 1.
 func (conn *Connection) FinishJob() {
-
+	conn.jobCount--
 }
 
 // GetWorkLoad returns the current estimated work load that
 //   the node has. It is made possible through Add/FinishJob
 func (conn *Connection) GetWorkLoad() int {
-	return 0
+	return conn.jobCount
 }
 
 // Connect initiates the connection between the balancer
-//   and the node. In this implementation, this only exists
-//   to verify that it can be connected to.
+//   and the node.
 func (conn *Connection) Connect() error {
+	// Construct the address and dial.
+	addr := conn.host + strconv.Itoa(conn.port)
+	client, err := rpc.DialHTTP("tcp", addr)
+
+	// Check if there is an error before storing the connection.
+	if err != nil {
+		return err
+	}
+
+	conn.client = client
+
 	return nil
 }
 
 // GetStatus returns the current Status of the node, or an error
 //   if it cannot retrieve the status.
-func (conn *Connection) GetStatus() (Status, error) {
-	return nil, nil
+func (conn *Connection) GetStatus() Status {
+	return conn.status
+}
+
+// UpdateStatus requests the status from the node and stores it.
+func (conn *Connection) UpdateStatus() error {
+	// Request the status from the node.
+	requestTime := time.Now()
+	var response string
+	err := conn.client.Call("Status", requestTime, &response)
+
+	if err != nil {
+		return err
+	}
+
+	conn.status.Update(response)
+
+	return nil
 }
 
 // Send is how a balancer can send work to the nodes. This
 //   implementation is using RPC.
 func (conn *Connection) Send(work string) (string, error) {
-	return "", nil
+	var response string
+	err := conn.client.Call("Do", work, &response)
+
+	if err != nil {
+		return "", err
+	}
+
+	return response, nil
 }

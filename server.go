@@ -60,6 +60,7 @@ func (node *Server) GetPort() int {
 func (node *Server) ListenAndServe() error {
 	// Handle using RPC.
 	rpc.RegisterName("Status", node.Status)
+	rpc.RegisterName("Do", node.Do)
 	rpc.HandleHTTP()
 
 	// Setup the listener.

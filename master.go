@@ -134,7 +134,8 @@ func (balancer *Master) MaintainNodes() error {
 			case <-time.After(balancer.pingFrequency):
 				// Handle pinging here.
 				for _, node := range balancer.nodes {
-					status, err := node.GetStatus()
+					err := node.UpdateStatus()
+					status := node.GetStatus()
 					if err != nil {
 						/* ----- TO DO ----- */
 						// Determine what errors GetStatus can return
@@ -171,7 +172,7 @@ func (balancer *Master) Delegate(work string) (string, error) {
 
 FindLowestLoad:
 	for _, node := range balancer.nodes {
-		currentLoad := node.GetLoad()
+		currentLoad := node.GetWorkLoad()
 
 		switch {
 		case lowestLoad == -1:
