@@ -12,16 +12,16 @@ import (
 
 // Server is an implementation of Node
 type Server struct {
-	host         string
-	port         int
-	worker       Worker
-	nodeFilePath string
+	host       string
+	port       int
+	worker     Worker
+	configPath string
 }
 
 // Register allows the node to register itself to the load balancer.
 func (node *Server) Register() error {
 	// Open up the file
-	file, err := os.OpenFile(node.nodeFilePath, os.O_RDWR|os.O_APPEND, 0666)
+	file, err := os.OpenFile(node.configPath, os.O_RDWR|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
@@ -87,4 +87,9 @@ func (node *Server) Do(work string, response *string) error {
 	finishedWork, err := node.worker.Do(work)
 	response = &finishedWork
 	return err
+}
+
+// NewNode returns an implementation of Node.
+func NewNode(host string, port int, worker Worker, configPath string) Node {
+	return &Server{host, port, worker, configPath}
 }

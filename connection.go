@@ -6,15 +6,6 @@ import (
 	"time"
 )
 
-// A ConnectionFactory creates the connection to the nodes for the balancer.
-type ConnectionFactory struct {
-}
-
-// Create takes the connection info and creates the connection struct.
-func (factory *ConnectionFactory) Create(connInfo string) NodeConnection {
-	return &Connection{}
-}
-
 // A Connection is a way for a balancer to communicate with a node.
 type Connection struct {
 	host     string

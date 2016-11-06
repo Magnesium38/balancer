@@ -49,7 +49,7 @@ type NodeConnection interface {
 
 // A NodeFactory is how a balancer can create new NodeConnections for itself.
 type NodeFactory interface {
-	Create(string) NodeConnection
+	Create(string) (NodeConnection, error)
 }
 
 // Node is the interface that defines the nodes that a load balancer can use.
@@ -74,6 +74,11 @@ type Worker interface {
 	// Status accepts a time which is interpreted as the time
 	//   the request was made for the status.
 	Status(time.Time) Status
+}
+
+// A StatusFactory is used to make Statuses not dependent on implementation.
+type StatusFactory interface {
+	Create() Status
 }
 
 // A Status is what a balancer can easily ask about its nodes.

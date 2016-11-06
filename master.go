@@ -14,12 +14,12 @@ import (
 
 // Master is a implementation of Balancer.
 type Master struct {
-	host          string
-	port          int
-	nodes         []NodeConnection
-	nodeFilePath  string
-	pingFrequency time.Duration
-	nodeFactory   NodeFactory
+	host       string
+	port       int
+	nodes      []NodeConnection
+	configPath string
+	frequency  time.Duration
+	factory    NodeFactory
 }
 
 // ListenAndServe is used to accept new work for the nodes.
@@ -86,7 +86,7 @@ func (balancer *Master) MaintainNodes() error {
 
 	// Initial read of file
 	// Open the file
-	file, err := os.Open(balancer.nodeFilePath)
+	file, err := os.Open(balancer.configPath)
 	if err != nil {
 		return err
 	}
@@ -96,10 +96,13 @@ func (balancer *Master) MaintainNodes() error {
 	for scanner.Scan() {
 		line := scanner.Text()
 		// Transform line into a node connection
-		node := balancer.nodeFactory.Create(line)
+		node, err := balancer.factory.Create(line)
+		if err != nil {
+			return err
+		}
 
 		// Establish a connection to the node.
-		err := node.Connect()
+		err = node.Connect()
 		if err != nil {
 			return err
 		}
@@ -131,7 +134,7 @@ func (balancer *Master) MaintainNodes() error {
 			// When there is no event from the watcher, ping nodes if needed.
 			//   If they are unresponsive, attempt to reconnect.
 			select {
-			case <-time.After(balancer.pingFrequency):
+			case <-time.After(balancer.frequency):
 				// Handle pinging here.
 				for _, node := range balancer.nodes {
 					err := node.UpdateStatus()
@@ -201,4 +204,17 @@ func (balancer *Master) GetHost() string {
 // GetPort returns the port that the balancer is being ran on.
 func (balancer *Master) GetPort() int {
 	return balancer.port
+}
+
+// NewLoadBalancer returns an implementation of Balancer.
+func NewLoadBalancer(host string, port int, configPath string, frequency time.Duration, factory NodeFactory) Balancer {
+	balancer := Master{}
+
+	balancer.host = host
+	balancer.port = port
+	balancer.configPath = configPath
+	balancer.frequency = frequency
+	balancer.factory = factory
+
+	return &balancer
 }
