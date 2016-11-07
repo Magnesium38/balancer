@@ -85,5 +85,5 @@ type StatusFactory interface {
 type Status interface {
 	String() string
 	Update(string)
-	GetIdleTime() time.Time
+	GetIdleTime() time.Duration
 }

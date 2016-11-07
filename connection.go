@@ -1,6 +1,7 @@
 package balancer
 
 import (
+	"fmt"
 	"net/rpc"
 	"strconv"
 	"time"
@@ -45,7 +46,7 @@ func (conn *Connection) GetWorkLoad() int {
 //   and the node.
 func (conn *Connection) Connect() error {
 	// Construct the address and dial.
-	addr := conn.host + strconv.Itoa(conn.port)
+	addr := conn.host + ":" + strconv.Itoa(conn.port)
 	client, err := rpc.DialHTTP("tcp", addr)
 
 	// Check if there is an error before storing the connection.
@@ -84,9 +85,11 @@ func (conn *Connection) UpdateStatus() error {
 //   implementation is using RPC.
 func (conn *Connection) Send(work string) (string, error) {
 	var response string
-	err := conn.client.Call("Do", work, &response)
+
+	err := conn.client.Call("Server.Do", work, &response)
 
 	if err != nil {
+		fmt.Println("Send error: ", err)
 		return "", err
 	}
 

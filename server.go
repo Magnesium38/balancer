@@ -41,7 +41,17 @@ func (node *Server) Register() error {
 
 	// Register itself.
 	writer := bufio.NewWriter(file)
-	writer.WriteString(addr + "\n")
+	_, err = writer.WriteString(addr + "\n")
+
+	if err != nil {
+		return err
+	}
+
+	err = writer.Flush()
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -59,8 +69,9 @@ func (node *Server) GetPort() int {
 // ListenAndServe is how the balancer assigns work.
 func (node *Server) ListenAndServe() error {
 	// Handle using RPC.
-	rpc.RegisterName("Status", node.Status)
-	rpc.RegisterName("Do", node.Do)
+	rpc.Register(node)
+	//rpc.RegisterName("Status", node.Status)
+	//rpc.RegisterName("Do", node.Do)
 	rpc.HandleHTTP()
 
 	// Setup the listener.
@@ -83,9 +94,9 @@ func (node *Server) Status(requestTime time.Time, response *string) error {
 
 // Do (work) is the implementation to instruct the node to do work
 //   in an RPC-accessible way.
-func (node *Server) Do(work string, response *string) error {
-	finishedWork, err := node.worker.Do(work)
-	response = &finishedWork
+func (node *Server) Do(work *string, response *string) error {
+	finishedWork, err := node.worker.Do(*work)
+	*response = finishedWork
 	return err
 }
 

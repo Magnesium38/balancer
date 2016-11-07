@@ -3,8 +3,9 @@ package balancer
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"net/http"
+	"net/rpc"
 	"os"
 	"strconv"
 	"time"
@@ -22,61 +23,28 @@ type Master struct {
 	factory    NodeFactory
 }
 
+// Work s
+func (master *Master) Work(argument string, reply *string) error {
+	response, err := master.Delegate(argument)
+	*reply = response
+	return err
+}
+
 // ListenAndServe is used to accept new work for the nodes.
-func (balancer *Master) ListenAndServe() error {
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(balancer.GetPort()))
+func (master *Master) ListenAndServe() error {
+	rpc.Register(master)
+	rpc.HandleHTTP()
+
+	listener, err := net.Listen("tcp", ":"+strconv.Itoa(master.GetPort()))
 	if err != nil {
 		return err
 	}
 
-	for {
-		// Accept new connections.
-		connection, err := listener.Accept()
-		if err != nil {
-			/* ----- TO DO ----- */
-			// Determine what causes the accept to fail and handle here.
-			//   I have a feeling that just blindly returning would
-			//   be a really poor way of handling it.
-		}
-
-		// Handle those new connections.
-		go func(conn net.Conn) {
-			// Read everything from the connection.
-			b, err := ioutil.ReadAll(conn)
-			if err != nil {
-				/* ----- TO DO ----- */
-				// Determine what causes the accept to fail and handle here.
-				//   I have a feeling that just blindly returning would
-				//   be a really poor way of handling it.
-			}
-
-			// Delegate the work and get the response.
-			response, err := balancer.Delegate(string(b))
-			if err != nil {
-				/* ----- TO DO ----- */
-				// Determine what causes the accept to fail and handle here.
-				//   I have a feeling that just blindly returning would
-				//   be a really poor way of handling it.
-			}
-
-			// If there is a response, send it back.
-			if response != "" {
-				_, err := conn.Write([]byte(response))
-				if err != nil {
-					/* ----- TO DO ----- */
-					// Determine what causes the accept to fail and handle here.
-					//   I have a feeling that just blindly returning would
-					//   be a really poor way of handling it.
-				}
-			}
-
-			conn.Close()
-		}(connection)
-	}
+	return http.Serve(listener, nil)
 }
 
 // MaintainNodes should be run alongside ListenAndServe to maintain nodes.
-func (balancer *Master) MaintainNodes() error {
+func (master *Master) MaintainNodes() error {
 	// Initial start up
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -86,7 +54,7 @@ func (balancer *Master) MaintainNodes() error {
 
 	// Initial read of file
 	// Open the file
-	file, err := os.Open(balancer.configPath)
+	file, err := os.Open(master.configPath)
 	if err != nil {
 		return err
 	}
@@ -96,7 +64,7 @@ func (balancer *Master) MaintainNodes() error {
 	for scanner.Scan() {
 		line := scanner.Text()
 		// Transform line into a node connection
-		node, err := balancer.factory.Create(line)
+		node, err := master.factory.Create(line)
 		if err != nil {
 			return err
 		}
@@ -108,7 +76,7 @@ func (balancer *Master) MaintainNodes() error {
 		}
 
 		// The connection was successful, keep track of the node.
-		balancer.nodes = append(balancer.nodes, node)
+		master.nodes = append(master.nodes, node)
 	}
 
 	// Check for scanner error.
@@ -117,6 +85,9 @@ func (balancer *Master) MaintainNodes() error {
 	}
 
 	// Nodes are all loaded
+
+	// Create a timer as a notification to check node status.
+	timer := time.NewTimer(master.frequency)
 
 	// Endless loop.
 	for {
@@ -130,51 +101,51 @@ func (balancer *Master) MaintainNodes() error {
 			fmt.Println(err)
 			/* ----- TO DO ----- */
 			continue
-		default:
-			// When there is no event from the watcher, ping nodes if needed.
-			//   If they are unresponsive, attempt to reconnect.
-			select {
-			case <-time.After(balancer.frequency):
-				// Handle pinging here.
-				for _, node := range balancer.nodes {
-					err := node.UpdateStatus()
-					status := node.GetStatus()
-					if err != nil {
-						/* ----- TO DO ----- */
-						// Determine what errors GetStatus can return
-						//   and how I want to handle them.
-					}
-
-					// Handle status.
-					// Consider stopping nodes that have been inactive.
-					// Need to consider how to bring nodes back up then.
-					// For now, just print it nicely.
-					fmt.Println(node.GetHost() + ":" +
-						strconv.Itoa(node.GetPort()) +
-						" - " + status.String())
+		case <-timer.C:
+			// The timer has finished. Check nodes and then reset it.
+			// Handle pinging here.
+			for _, node := range master.nodes {
+				err := node.UpdateStatus()
+				status := node.GetStatus()
+				if err != nil {
+					/* ----- TO DO ----- */
+					// Determine what errors GetStatus can return
+					//   and how I want to handle them.
 				}
-			default:
+
+				// Handle status.
+				// Consider stopping nodes that have been inactive.
+				// Need to consider how to bring nodes back up then.
+				// For now, just print it nicely.
+				fmt.Println(node.GetHost() + ":" +
+					strconv.Itoa(node.GetPort()) +
+					" - " + status.String())
 			}
+
+			timer.Stop()
+			timer.Reset(master.frequency)
+		default:
 		}
 	}
 }
 
 // Delegate passes along work as a string to a node and returns
 //   the reply if any.
-func (balancer *Master) Delegate(work string) (string, error) {
+func (master *Master) Delegate(work string) (string, error) {
 	// Find the lowest load and give that node more work.
 	var worker NodeConnection
 	lowestLoad := -1
 
-	if len(balancer.nodes) == 0 {
+	if len(master.nodes) == 0 {
 		/* ----- TO DO ----- */
 		// If there are no NodeConnections, work cannot be delegated.
 		//   This needs to be handled somehow.
+		fmt.Println("ERROR No nodes.")
 		return "", nil
 	}
 
 FindLowestLoad:
-	for _, node := range balancer.nodes {
+	for _, node := range master.nodes {
 		currentLoad := node.GetWorkLoad()
 
 		switch {
@@ -197,24 +168,24 @@ FindLowestLoad:
 }
 
 // GetHost returns the hostname that the balancer is being ran on.
-func (balancer *Master) GetHost() string {
-	return balancer.host
+func (master *Master) GetHost() string {
+	return master.host
 }
 
 // GetPort returns the port that the balancer is being ran on.
-func (balancer *Master) GetPort() int {
-	return balancer.port
+func (master *Master) GetPort() int {
+	return master.port
 }
 
 // NewLoadBalancer returns an implementation of Balancer.
 func NewLoadBalancer(host string, port int, configPath string, frequency time.Duration, factory NodeFactory) Balancer {
-	balancer := Master{}
+	master := Master{}
 
-	balancer.host = host
-	balancer.port = port
-	balancer.configPath = configPath
-	balancer.frequency = frequency
-	balancer.factory = factory
+	master.host = host
+	master.port = port
+	master.configPath = configPath
+	master.frequency = frequency
+	master.factory = factory
 
-	return &balancer
+	return &master
 }
