@@ -1,0 +1,4 @@
+Look at why my test balancer is using so much CPU when idle.
+Test MaintainNodes, I haven't touched fsnotify
+    Errors still needs testing.
+    Also take a better pass on that rather than the hackish thing I did.

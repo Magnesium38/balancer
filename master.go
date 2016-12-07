@@ -15,12 +15,12 @@ import (
 
 // Master is a implementation of Balancer.
 type Master struct {
-	host       string
-	port       int
-	nodes      []NodeConnection
-	configPath string
-	frequency  time.Duration
-	factory    NodeFactory
+	host         string
+	port         int
+	nodes        []NodeConnection
+	nodeRegistry string
+	frequency    time.Duration
+	factory      NodeFactory
 }
 
 // Work s
@@ -30,9 +30,17 @@ func (master *Master) Work(argument string, reply *string) error {
 	return err
 }
 
+type MasterWorker struct {
+	master *Master
+}
+
+func (s *MasterWorker) Work(argument string, reply *string) error {
+	return s.master.Work(argument, reply)
+}
+
 // ListenAndServe is used to accept new work for the nodes.
 func (master *Master) ListenAndServe() error {
-	rpc.Register(master)
+	rpc.RegisterName("Master", &MasterWorker{master})
 	rpc.HandleHTTP()
 
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(master.GetPort()))
@@ -41,6 +49,59 @@ func (master *Master) ListenAndServe() error {
 	}
 
 	return http.Serve(listener, nil)
+}
+
+// updateNodes does a full read of the node repository
+func (master *Master) updateNodes() error {
+	// Open the file
+	file, err := os.Open(master.nodeRegistry)
+	if err != nil {
+		return err
+	}
+
+	// Read each line as a node into nodes.
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Transform line into a node connection
+		node, err := master.factory.Create(line)
+		if err != nil {
+			return err
+		}
+
+		// Check if this node already has this connection.
+		keep := true
+		for _, existingNode := range master.nodes {
+			if node.GetHost() != existingNode.GetHost() {
+				continue
+			}
+			if node.GetPort() != existingNode.GetPort() {
+				continue
+			}
+			keep = false
+			break
+		}
+
+		if !keep {
+			continue
+		}
+
+		// Establish a connection to the node.
+		err = node.Connect()
+		if err != nil {
+			return err
+		}
+
+		// The connection was successful, keep track of the node.
+		master.nodes = append(master.nodes, node)
+	}
+
+	// Check for scanner error.
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // MaintainNodes should be run alongside ListenAndServe to maintain nodes.
@@ -52,9 +113,12 @@ func (master *Master) MaintainNodes() error {
 	}
 	defer watcher.Close()
 
+	// Add the file to be watched.
+	watcher.Add(master.nodeRegistry)
+
 	// Initial read of file
 	// Open the file
-	file, err := os.Open(master.configPath)
+	file, err := os.Open(master.nodeRegistry)
 	if err != nil {
 		return err
 	}
@@ -84,17 +148,20 @@ func (master *Master) MaintainNodes() error {
 		return err
 	}
 
-	// Nodes are all loaded
-
 	// Create a timer as a notification to check node status.
 	timer := time.NewTimer(master.frequency)
 
 	// Endless loop.
 	for {
 		// Accept new nodes using fsnotify to watch a file.
+
 		select {
-		case event := <-watcher.Events:
-			fmt.Println(event)
+		case <-watcher.Events:
+			// Typically means a new node should be watched.
+			err := master.updateNodes()
+			if err != nil {
+				fmt.Println(err)
+			}
 			/* ----- TO DO ----- */
 			continue
 		case err := <-watcher.Errors:
@@ -114,6 +181,7 @@ func (master *Master) MaintainNodes() error {
 				}
 
 				// Handle status.
+				// TO DO:
 				// Consider stopping nodes that have been inactive.
 				// Need to consider how to bring nodes back up then.
 				// For now, just print it nicely.
@@ -124,7 +192,6 @@ func (master *Master) MaintainNodes() error {
 
 			timer.Stop()
 			timer.Reset(master.frequency)
-		default:
 		}
 	}
 }
@@ -164,6 +231,8 @@ FindLowestLoad:
 		}
 	}
 
+	worker.AddJob()
+	defer worker.FinishJob()
 	return worker.Send(work)
 }
 
@@ -178,12 +247,12 @@ func (master *Master) GetPort() int {
 }
 
 // NewLoadBalancer returns an implementation of Balancer.
-func NewLoadBalancer(host string, port int, configPath string, frequency time.Duration, factory NodeFactory) Balancer {
+func NewLoadBalancer(host string, port int, nodeRegistry string, frequency time.Duration, factory NodeFactory) Balancer {
 	master := Master{}
 
 	master.host = host
 	master.port = port
-	master.configPath = configPath
+	master.nodeRegistry = nodeRegistry
 	master.frequency = frequency
 	master.factory = factory
 

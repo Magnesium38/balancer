@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/rpc"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -14,6 +15,7 @@ type Connection struct {
 	jobCount int
 	status   Status
 	client   *rpc.Client
+	jobLock  sync.Mutex
 }
 
 // GetHost returns the hostname that the node is listening on.
@@ -28,17 +30,23 @@ func (conn *Connection) GetPort() int {
 
 // AddJob increments the internal counter of jobs by 1.
 func (conn *Connection) AddJob() {
+	conn.jobLock.Lock()
+	defer conn.jobLock.Unlock()
 	conn.jobCount++
 }
 
 // FinishJob decrements the internal counter of jobs by 1.
 func (conn *Connection) FinishJob() {
+	conn.jobLock.Lock()
+	defer conn.jobLock.Unlock()
 	conn.jobCount--
 }
 
 // GetWorkLoad returns the current estimated work load that
 //   the node has. It is made possible through Add/FinishJob
 func (conn *Connection) GetWorkLoad() int {
+	conn.jobLock.Lock()
+	defer conn.jobLock.Unlock()
 	return conn.jobCount
 }
 

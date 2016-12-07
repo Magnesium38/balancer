@@ -69,9 +69,7 @@ func (node *Server) GetPort() int {
 // ListenAndServe is how the balancer assigns work.
 func (node *Server) ListenAndServe() error {
 	// Handle using RPC.
-	rpc.Register(node)
-	//rpc.RegisterName("Status", node.Status)
-	//rpc.RegisterName("Do", node.Do)
+	rpc.RegisterName("Server", &ServerWorker{node})
 	rpc.HandleHTTP()
 
 	// Setup the listener.
@@ -82,6 +80,18 @@ func (node *Server) ListenAndServe() error {
 
 	// Serve.
 	return http.Serve(listener, nil)
+}
+
+type ServerWorker struct {
+	node *Server
+}
+
+func (worker ServerWorker) Status(requestTime time.Time, response *string) error {
+	return worker.node.Status(requestTime, response)
+}
+
+func (worker ServerWorker) Do(work *string, response *string) error {
+	return worker.node.Do(work, response)
 }
 
 // Status is the implementation to get the status of the node
